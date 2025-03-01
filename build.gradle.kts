@@ -1,5 +1,5 @@
 plugins {
-    id("java")
+    java
 }
 
 group = "uk.co.threebugs"
@@ -24,13 +24,19 @@ dependencies {
     testAnnotationProcessor("org.projectlombok:lombok:1.18.26")
 }
 
-// Use the Java toolchain to set Java 21 as the language level
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion.set(JavaLanguageVersion.of(21))
     }
 }
 
 tasks.test {
     useJUnitPlatform()
+}
+
+// Optionally, configure the JAR task to include the Main-Class attribute in the manifest.
+tasks.jar {
+    manifest {
+        attributes["Main-Class"] = "uk.co.threebugs.Main" // Replace with your actual main class
+    }
 }
