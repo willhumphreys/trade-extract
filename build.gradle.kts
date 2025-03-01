@@ -52,9 +52,8 @@ tasks.test {
     useJUnitPlatform()
 }
 
-// Optionally configure the JAR task with a Main-Class entry
 tasks.jar {
     manifest {
-        attributes["Main-Class"] = "uk.co.threebugs.Main" // Replace with your actual main class
+        attributes["Main-Class"] = "uk.co.threebugs.analysis.TraderIdSearch"
     }
 }
