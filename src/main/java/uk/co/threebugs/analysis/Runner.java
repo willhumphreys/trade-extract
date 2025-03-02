@@ -1,6 +1,7 @@
 package uk.co.threebugs.analysis;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.cli.*;
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.regions.Region;
@@ -20,10 +21,9 @@ import java.util.stream.Collectors;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 @Slf4j
-public class S3CsvSplitter {
+public class Runner {
 
     private static final String BUCKET_NAME = "mochi-graphs";
-    private static final String PREFIX = "btc-1mF/";
     // Change the region if needed.
     private static final Region REGION = Region.US_EAST_1;
     // Columns to filter duplicate rows.
@@ -32,18 +32,67 @@ public class S3CsvSplitter {
 
 
     public static void main(String[] args) {
-        // Build the S3Client
+
+        // Define command-line options using Apache Commons CLI.
+        Options options = new Options();
+
+        Option symbolOption = Option.builder("s")
+                .longOpt("symbol")
+                .hasArg(true)
+                .desc("The symbol to process (required)")
+                .required(true)
+                .build();
+
+        Option scenarioOption = Option.builder("c")
+                .longOpt("scenario")
+                .hasArg(true)
+                .desc("The scenario to process (required)")
+                .required(true)
+                .build();
+
+        options.addOption(symbolOption);
+        options.addOption(scenarioOption);
+
+        CommandLineParser parser = new DefaultParser();
+        HelpFormatter formatter = new HelpFormatter();
+        CommandLine cmd;
+
+        try {
+            cmd = parser.parse(options, args);
+        } catch (ParseException e) {
+            log.error("Error parsing arguments: {}", e.getMessage());
+            formatter.printHelp("Runner", options);
+            System.exit(1);
+            return;
+        }
+
+        // Retrieve the symbol and scenario values.
+        String symbol = cmd.getOptionValue("symbol");
+        String scenario = cmd.getOptionValue("scenario");
+
+        // Log the received parameters.
+        log.info("Received symbol: {}", symbol);
+        log.info("Received scenario: {}", scenario);
+
+        // Create the output directory on startup if it doesn't exist.
+        Path outputDir = Paths.get("output");
+        try {
+            Files.createDirectories(outputDir);
+            log.info("Output directory created or already exists: {}", outputDir.toAbsolutePath());
+        } catch (IOException e) {
+            log.error("Failed to create output directory {}: {}", outputDir.toAbsolutePath(), e.getMessage(), e);
+            System.exit(1);
+        }
+
 
         S3Client s3Client = S3Client.builder().region(REGION).build();
 
         s3TradesProcessor = new S3TradesProcessor(s3Client);
         S3ExtractsUploader s3ExtractsUploader = new S3ExtractsUploader(s3Client);
 
-        String symbol = PREFIX.substring(0, PREFIX.length() - 1);
         groupAndProcessFiles(s3Client, symbol);
 
         s3ExtractsUploader.compressAndPushAllScenarios(Path.of("output", symbol));
-
     }
 
     /**
@@ -54,15 +103,15 @@ public class S3CsvSplitter {
      */
     public static void groupAndProcessFiles(S3Client s3Client, String symbol) {
         // List all relevant CSV keys from S3.
-        List<String> keys = listS3Keys(s3Client, BUCKET_NAME, PREFIX);
+        List<String> keys = listS3Keys(s3Client, BUCKET_NAME, symbol + "/");
         Map<String, List<String>> scenarioGroups = new HashMap<>();
 
         // Group keys by scenario. Assuming the key format is:
         // "<PREFIX><scenario>/<other folders>/...csv"
         for (String key : keys) {
-            int slashIndex = key.indexOf("/", PREFIX.length());
+            int slashIndex = key.indexOf("/", symbol.length() + 1);
             if (slashIndex > 0) {
-                String scenario = key.substring(PREFIX.length(), slashIndex);
+                String scenario = key.substring(symbol.length() + 1, slashIndex);
                 scenarioGroups.computeIfAbsent(scenario, k -> new ArrayList<>()).add(key);
             } else {
                 log.warn("Key does not contain a scenario folder: {}", key);
