@@ -90,7 +90,7 @@ public class Runner {
         s3TradesProcessor = new S3TradesProcessor(s3Client);
         S3ExtractsUploader s3ExtractsUploader = new S3ExtractsUploader(s3Client);
 
-        groupAndProcessFiles(s3Client, symbol);
+        groupAndProcessFiles(s3Client, symbol, scenario);
 
         s3ExtractsUploader.compressAndPushAllScenarios(Path.of("output", symbol));
     }
@@ -101,7 +101,7 @@ public class Runner {
      * @param s3Client The S3 client.
      * @param symbol   The symbol
      */
-    public static void groupAndProcessFiles(S3Client s3Client, String symbol) {
+    public static void groupAndProcessFiles(S3Client s3Client, String symbol, String scenario2) {
         // List all relevant CSV keys from S3.
         List<String> keys = listS3Keys(s3Client, BUCKET_NAME, symbol + "/");
         Map<String, List<String>> scenarioGroups = new HashMap<>();
@@ -112,7 +112,9 @@ public class Runner {
             int slashIndex = key.indexOf("/", symbol.length() + 1);
             if (slashIndex > 0) {
                 String scenario = key.substring(symbol.length() + 1, slashIndex);
-                scenarioGroups.computeIfAbsent(scenario, k -> new ArrayList<>()).add(key);
+                if (scenario.equals(scenario2)) {
+                    scenarioGroups.computeIfAbsent(scenario, k -> new ArrayList<>()).add(key);
+                }
             } else {
                 log.warn("Key does not contain a scenario folder: {}", key);
             }
