@@ -12,7 +12,7 @@ public class TraderScenarioPaths {
      * Helper class to hold the paths and information for each trader scenario.
      */
 
-    Path dataPath;
+    String scenario;
     Path scenarioOutputPath;
     String directionLabel;
     int direction;

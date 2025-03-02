@@ -29,14 +29,16 @@ public class TradeProcessor {
         Map<String, BufferedWriter> writers = writerInitializer.initializeWriters(traderIds, paths);
         Map<String, Integer> runningTotalProfits = writerInitializer.initializeRunningTotalProfits(traderIds);
 
-        List<File> files = fileHandler.getSortedFiles(paths.getDataPath());
+        String scenario = paths.getScenario();
 
-        for (File file : files) {
-            log.info("Processing file: {}", file.getName());
-            processFile(file, writers, runningTotalProfits, paths);
-        }
-
-        writerInitializer.closeWriters(writers);
+//        List<File> files = fileHandler.getSortedFiles(scenario);
+//
+//        for (File file : files) {
+//            log.info("Processing file: {}", file.getName());
+//            processFile(file, writers, runningTotalProfits, paths);
+//        }
+//
+//        writerInitializer.closeWriters(writers);
     }
 
     private void processFile(File file, Map<String, BufferedWriter> writers, Map<String, Integer> runningTotalProfits, TraderScenarioPaths paths) {

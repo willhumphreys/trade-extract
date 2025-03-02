@@ -19,6 +19,7 @@ dependencies {
     // Hadoop dependencies from pom.xml
     implementation("com.hadoop.gplcompression:hadoop-lzo:0.4.20")
     implementation("org.apache.hadoop:hadoop-common:3.3.0")
+    implementation("software.amazon.awssdk:s3:2.20.40")
 
     // Lombok (updated to version 1.18.34 to match pom.xml)
     compileOnly("org.projectlombok:lombok:1.18.34")
