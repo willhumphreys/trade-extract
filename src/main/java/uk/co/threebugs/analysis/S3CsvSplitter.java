@@ -18,6 +18,8 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 @Slf4j
 public class S3CsvSplitter {
 
@@ -80,7 +82,7 @@ public class S3CsvSplitter {
             // Write the aggregated CSV to a file (name it using the scenario string).
             Path outputPath = Paths.get(scenario + ".csv");
             try {
-                Files.writeString(outputPath, aggregatedContent, StandardCharsets.UTF_8);
+                Files.writeString(outputPath, aggregatedContent, UTF_8);
                 log.info("File written for scenario '{}': {}", scenario, outputPath.toAbsolutePath());
             } catch (IOException e) {
                 log.error("Error writing file for scenario '{}'", scenario, e);
@@ -162,7 +164,7 @@ public class S3CsvSplitter {
     public static String downloadCsvContent(S3Client s3Client, String bucketName, String key) {
         GetObjectRequest getObjectRequest = GetObjectRequest.builder().bucket(bucketName).key(key).build();
         ResponseBytes<?> objectBytes = s3Client.getObject(getObjectRequest, ResponseTransformer.toBytes());
-        return objectBytes.asString(StandardCharsets.UTF_8);
+        return objectBytes.asString(UTF_8);
     }
 
     /**

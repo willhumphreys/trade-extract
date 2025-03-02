@@ -8,14 +8,14 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.util.*;
+
+import static java.nio.file.StandardOpenOption.*;
 
 @Slf4j
 public class S3TradesProcessor {
@@ -31,20 +31,10 @@ public class S3TradesProcessor {
         this.fileHandler = new FileHandler();
     }
 
-    /**
-     * For the given symbol and scenario, this method first lists the available years (by listing object prefixes)
-     * and then iterates over those years and partitions to download, decompress, and process the trade files.
-     *
-     * @param symbol    The symbol (e.g. "btc-1mF").
-     * @param scenario  The scenario string (e.g. "s_-3000..-100..200___l_100..7500..200___o_-800..800..50___d_14..14..7___out_8..8..4")
-     * @param traderIds A set of trader ids to be filtered on.
-     */
     public void processTrades(String symbol, String scenario, Set<String> traderIds) {
-        // Generate the trade scenario prefix used for key construction.
-        String tradeScenario = scenario + "___mw___wc=9";
-        // The prefix for listing keys (up to the year folder) is:
-        // symbol/tradeScenario/
-        String prefix = String.format("%s/%s/", symbol, tradeScenario);
+        // Construct the prefix using the actual key structure.
+        // The scenario parameter is expected to be the full string as seen in S3.
+        String prefix = String.format("%s/%s/", symbol, scenario);
 
         List<Integer> availableYears = getAvailableYears(prefix);
         if (availableYears.isEmpty()) {
@@ -52,20 +42,26 @@ public class S3TradesProcessor {
             return;
         }
 
-        // Process trade files only for the available years.
+        // Process trade files for each available year.
         for (int year : availableYears) {
             int partitionIndex = 0;
             while (true) {
+                // Generate the full S3 key using the exact key format.
+                // For example:
+                // symbol/scenario/year/trades--scenario___symbol0_p{partitionIndex}.csv.lzo
                 String key = generateTradeKey(symbol, scenario, year, partitionIndex);
                 try {
-                    GetObjectRequest request = GetObjectRequest.builder().bucket(TRADES_BUCKET).key(key).build();
+                    GetObjectRequest request = GetObjectRequest.builder()
+                            .bucket(TRADES_BUCKET)
+                            .key(key)
+                            .build();
 
                     ResponseInputStream<GetObjectResponse> response = s3Client.getObject(request);
                     Path tempFile = Files.createTempFile("trade", ".lzo");
                     Files.copy(response, tempFile, StandardCopyOption.REPLACE_EXISTING);
                     log.info("Downloaded trade file: {} (temp: {})", key, tempFile);
 
-                    processTradeFile(tempFile.toFile(), traderIds);
+                    processTradeFile(tempFile.toFile(), symbol, scenario, traderIds);
 
                     Files.deleteIfExists(tempFile);
                     partitionIndex++;
@@ -82,6 +78,7 @@ public class S3TradesProcessor {
             }
         }
     }
+
 
     /**
      * Lists objects using the prefix and returns a list of years (as integers) for which trade files exist.
@@ -115,47 +112,81 @@ public class S3TradesProcessor {
         return years;
     }
 
-    /**
-     * Generates the trade file key based on the symbol, scenario, year, and partition index.
-     * <p>
-     * The key is assumed to follow this pattern:
-     * symbol+"/"+ (scenario + "___mw___wc=9") + "/" + year + "/trades--" + (scenario + "___mw___wc=9")
-     * + "___" + symbolName + "0_p" + partitionIndex + ".csv.lzo"
-     *
-     * @param symbol         The symbol (e.g. "btc-1mF").
-     * @param scenario       The scenario string.
-     * @param year           The year for the trade file.
-     * @param partitionIndex The partition index (starting with 0).
-     * @return The full S3 key for the trade file.
-     */
     private String generateTradeKey(String symbol, String scenario, int year, int partitionIndex) {
-        // Append the additional components required by the trade key.
-        String tradeScenario = scenario + "___mw___wc=9";
-        // Use the full symbol instead of splitting at the hyphen.
-        return String.format("%s/%s/%d/trades--%s___%s0_p%d.csv.lzo", symbol, tradeScenario, year, tradeScenario, symbol, partitionIndex);
+        // The key pattern is:
+        // symbol/scenario/year/trades--scenario___symbol0_p{partitionIndex}.csv.lzo
+        return String.format("%s/%s/%d/trades--%s___%s0_p%d.csv.lzo",
+                symbol, scenario, year, scenario, symbol, partitionIndex);
     }
 
     /**
-     * Decompresses the trade file (using FileHandler) and filters rows based on the traderIds.
-     * For matching rows, the line is output to the console.
+     * Decompresses and processes the trade file by filtering rows based on the provided traderIds.
+     * For each trader, the corresponding trade rows are written to a separate file under a directory
+     * structure based on the symbol and scenario.
      *
-     * @param file      The local file (in lzo format) to process.
-     * @param traderIds A set of trader ids to include.
+     * @param file      The local file (already decompressed) to process.
+     * @param symbol    The symbol (e.g. "btc-1mF") for folder organization.
+     * @param scenario  The scenario string (e.g. "s_-3000..-100..200___l_100..7500..200___o_-800..800..50___d_14..14..7___out_8..8..4")
+     *                  for folder organization.
+     * @param traderIds The set of trader IDs to include.
      * @throws IOException If an I/O error occurs.
      */
-    private void processTradeFile(File file, Set<String> traderIds) throws IOException {
+    private void processTradeFile(File file, String symbol, String scenario, Set<String> traderIds) throws IOException {
+        // Map to collect trade lines grouped by traderId.
+        Map<String, List<String>> traderTrades = new HashMap<>();
+
         try (BufferedReader reader = fileHandler.getReader(file)) {
-            String header = reader.readLine(); // Skip or validate the header.
-            while (true) {
-                String line = reader.readLine();
-                if (line == null) break;
-                String traderId = line.split(",")[0];
+            String line;
+            while ((line = reader.readLine()) != null) {
+
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+
+                // Split the line on commas; the first token is the traderId.
+                String[] tokens = line.split(",");
+                if (tokens.length < 1) {
+                    continue;
+                }
+                String traderId = tokens[0].trim();
+
+                // Only include trades for the specified traderIds.
                 if (traderIds.contains(traderId)) {
-                    System.out.println(line);
+                    traderTrades.computeIfAbsent(traderId, k -> new ArrayList<>()).add(line);
                 }
             }
+
+            // Prepare output directory based on symbol and scenario.
+            Path outputDir = Paths.get("output", symbol, scenario);
+            if (!Files.exists(outputDir)) {
+                Files.createDirectories(outputDir);
+            }
+
+            // Inside processTradeFile, after collecting trades for each trader:
+            for (Map.Entry<String, List<String>> entry : traderTrades.entrySet()) {
+                String traderId = entry.getKey();
+                List<String> trades = entry.getValue();
+                Path traderFile = outputDir.resolve(traderId + ".csv");
+
+                // Open the file in append mode, creating it if it doesn't exist.
+                try (BufferedWriter writer = Files.newBufferedWriter(traderFile,
+                        StandardCharsets.UTF_8,
+                        CREATE,
+                        APPEND)) {
+                    for (String trade : trades) {
+                        writer.write(trade);
+                        writer.newLine();
+                    }
+                }
+
+                log.info("Appended {} trades for trader {} to file {}", trades.size(), traderId, traderFile);
+            }
+
         }
     }
+
+    // ... other methods such as processTrades, generateTradeKey, etc. ...
+
 
     // Optional: shutdown the S3 client if needed.
     public void shutdown() {
