@@ -15,13 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.Arrays;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -32,14 +26,17 @@ public class S3CsvSplitter {
     // Change the region if needed.
     private static final Region REGION = Region.US_EAST_1;
     // Columns to filter duplicate rows.
-    private static final List<String> FILTER_COLUMNS = List.of(
-            "dayofweek", "hourofday", "stop", "limit", "tickoffset", "tradeduration", "outoftime"
-    );
+    private static final List<String> FILTER_COLUMNS = List.of("dayofweek", "hourofday", "stop", "limit", "tickoffset", "tradeduration", "outoftime");
+    private static S3TradesProcessor s3TradesProcessor;
 
     public static void main(String[] args) {
         // Build the S3Client
+
+        s3TradesProcessor = new S3TradesProcessor();
+
         try (S3Client s3Client = S3Client.builder().region(REGION).build()) {
-            groupAndProcessFiles(s3Client);
+            String symbol = PREFIX.substring(0, PREFIX.length() - 1);
+            groupAndProcessFiles(s3Client, symbol);
         }
     }
 
@@ -47,8 +44,9 @@ public class S3CsvSplitter {
      * Groups S3 keys by scenario, processes each group, and writes a file per scenario.
      *
      * @param s3Client The S3 client.
+     * @param symbol The symbol
      */
-    public static void groupAndProcessFiles(S3Client s3Client) {
+    public static void groupAndProcessFiles(S3Client s3Client, String symbol) {
         // List all relevant CSV keys from S3.
         List<String> keys = listS3Keys(s3Client, BUCKET_NAME, PREFIX);
         Map<String, List<String>> scenarioGroups = new HashMap<>();
@@ -75,6 +73,10 @@ public class S3CsvSplitter {
             // Remove duplicate rows.
             aggregatedContent = filterDuplicates(aggregatedContent, FILTER_COLUMNS);
 
+            Set<String> traderIds = extractTraderIds(aggregatedContent);
+
+            s3TradesProcessor.processTrades(symbol, scenario, traderIds);
+
             // Write the aggregated CSV to a file (name it using the scenario string).
             Path outputPath = Paths.get(scenario + ".csv");
             try {
@@ -99,10 +101,7 @@ public class S3CsvSplitter {
         String continuationToken = null;
 
         do {
-            ListObjectsV2Request.Builder requestBuilder = ListObjectsV2Request.builder()
-                    .bucket(bucketName)
-                    .prefix(prefix)
-                    .maxKeys(1000);
+            ListObjectsV2Request.Builder requestBuilder = ListObjectsV2Request.builder().bucket(bucketName).prefix(prefix).maxKeys(1000);
             if (continuationToken != null) {
                 requestBuilder.continuationToken(continuationToken);
             }
@@ -161,10 +160,7 @@ public class S3CsvSplitter {
      * @return The file content as a String.
      */
     public static String downloadCsvContent(S3Client s3Client, String bucketName, String key) {
-        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                .bucket(bucketName)
-                .key(key)
-                .build();
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder().bucket(bucketName).key(key).build();
         ResponseBytes<?> objectBytes = s3Client.getObject(getObjectRequest, ResponseTransformer.toBytes());
         return objectBytes.asString(StandardCharsets.UTF_8);
     }
@@ -175,8 +171,8 @@ public class S3CsvSplitter {
      * Duplicate detection is based on the given columns.
      * The header row in the output is re-created with each header value wrapped in double quotes.
      *
-     * @param csvData         The concatenated CSV content.
-     * @param columnsToCheck  The list of column names to base duplicate filtering on.
+     * @param csvData        The concatenated CSV content.
+     * @param columnsToCheck The list of column names to base duplicate filtering on.
      * @return The filtered CSV content as a String.
      */
     // In the filterDuplicates method:
@@ -206,10 +202,7 @@ public class S3CsvSplitter {
         }
 
         // Create a new header line wrapping each header value with double quotes.
-        String newHeader = Arrays.stream(headers)
-                .map(String::trim)
-                .map(s -> "\"" + s + "\"")
-                .collect(Collectors.joining(","));
+        String newHeader = Arrays.stream(headers).map(String::trim).map(s -> "\"" + s + "\"").collect(Collectors.joining(","));
 
         // Use a Set to track rows (based on the joined filter column values) already seen.
         Set<String> seenRows = new HashSet<>();
@@ -247,4 +240,56 @@ public class S3CsvSplitter {
         log.info("Filtered output length: {}", filteredOutput.length());
         return filteredOutput.toString();
     }
+
+    /**
+     * Extracts and returns a Set of traderIds from the provided CSV data.
+     * Assumes that the CSV header includes a column named "traderid".
+     *
+     * @param csvData The CSV content as a String.
+     * @return A Set containing traderIds.
+     */
+    public static Set<String> extractTraderIds(String csvData) {
+        Set<String> traderIds = new HashSet<>();
+        // Split CSV into individual lines.
+        String[] lines = csvData.split("\\r?\\n");
+        if (lines.length == 0) {
+            return traderIds;
+        }
+
+        // Parse the header line.
+        String headerLine = lines[0];
+        // Remove extra quotes and split on commas.
+        String[] headers = headerLine.split(",");
+        int traderIdIndex = -1;
+        for (int i = 0; i < headers.length; i++) {
+            String header = headers[i].trim().replace("\"", "");
+            if ("traderid".equalsIgnoreCase(header)) {
+                traderIdIndex = i;
+                break;
+            }
+        }
+        if (traderIdIndex == -1) {
+            log.error("The CSV header does not contain a 'traderid' column.");
+            return traderIds;
+        }
+
+        // Process each subsequent row.
+        for (int i = 1; i < lines.length; i++) {
+            String line = lines[i];
+            if (line.trim().isEmpty()) {
+                continue;
+            }
+            String[] tokens = line.split(",");
+            if (traderIdIndex < tokens.length) {
+                String traderId = tokens[traderIdIndex].trim().replace("\"", "");
+                traderIds.add(traderId);
+            } else {
+                log.warn("Skipping line {} as it doesn't contain enough columns.", i + 1);
+            }
+        }
+
+        log.info("Extracted {} unique traderIds.", traderIds.size());
+        return traderIds;
+    }
 }
+
