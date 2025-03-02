@@ -3,7 +3,6 @@ package uk.co.threebugs.analysis;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.exception.SdkClientException;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 
@@ -12,22 +11,25 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 
-import static java.nio.file.StandardOpenOption.*;
+import static java.nio.file.StandardOpenOption.APPEND;
+import static java.nio.file.StandardOpenOption.CREATE;
 
 @Slf4j
 public class S3TradesProcessor {
 
     private static final String TRADES_BUCKET = "mochi-trades";
-    private static final Region REGION = Region.US_EAST_1;
 
     private final S3Client s3Client;
     private final FileHandler fileHandler;
 
-    public S3TradesProcessor() {
-        this.s3Client = S3Client.builder().region(REGION).build();
+    public S3TradesProcessor(S3Client s3Client) {
+        this.s3Client = s3Client;
         this.fileHandler = new FileHandler();
     }
 
@@ -51,10 +53,7 @@ public class S3TradesProcessor {
                 // symbol/scenario/year/trades--scenario___symbol0_p{partitionIndex}.csv.lzo
                 String key = generateTradeKey(symbol, scenario, year, partitionIndex);
                 try {
-                    GetObjectRequest request = GetObjectRequest.builder()
-                            .bucket(TRADES_BUCKET)
-                            .key(key)
-                            .build();
+                    GetObjectRequest request = GetObjectRequest.builder().bucket(TRADES_BUCKET).key(key).build();
 
                     ResponseInputStream<GetObjectResponse> response = s3Client.getObject(request);
                     Path tempFile = Files.createTempFile("trade", ".lzo");
@@ -115,8 +114,7 @@ public class S3TradesProcessor {
     private String generateTradeKey(String symbol, String scenario, int year, int partitionIndex) {
         // The key pattern is:
         // symbol/scenario/year/trades--scenario___symbol0_p{partitionIndex}.csv.lzo
-        return String.format("%s/%s/%d/trades--%s___%s0_p%d.csv.lzo",
-                symbol, scenario, year, scenario, symbol, partitionIndex);
+        return String.format("%s/%s/%d/trades--%s___%s0_p%d.csv.lzo", symbol, scenario, year, scenario, symbol, partitionIndex);
     }
 
     /**
@@ -169,10 +167,7 @@ public class S3TradesProcessor {
                 Path traderFile = outputDir.resolve(traderId + ".csv");
 
                 // Open the file in append mode, creating it if it doesn't exist.
-                try (BufferedWriter writer = Files.newBufferedWriter(traderFile,
-                        StandardCharsets.UTF_8,
-                        CREATE,
-                        APPEND)) {
+                try (BufferedWriter writer = Files.newBufferedWriter(traderFile, StandardCharsets.UTF_8, CREATE, APPEND)) {
                     for (String trade : trades) {
                         writer.write(trade);
                         writer.newLine();

@@ -11,7 +11,6 @@ import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -31,22 +30,27 @@ public class S3CsvSplitter {
     private static final List<String> FILTER_COLUMNS = List.of("dayofweek", "hourofday", "stop", "limit", "tickoffset", "tradeduration", "outoftime");
     private static S3TradesProcessor s3TradesProcessor;
 
+
     public static void main(String[] args) {
         // Build the S3Client
 
-        s3TradesProcessor = new S3TradesProcessor();
+        S3Client s3Client = S3Client.builder().region(REGION).build();
 
-        try (S3Client s3Client = S3Client.builder().region(REGION).build()) {
-            String symbol = PREFIX.substring(0, PREFIX.length() - 1);
-            groupAndProcessFiles(s3Client, symbol);
-        }
+        s3TradesProcessor = new S3TradesProcessor(s3Client);
+        S3ExtractsUploader s3ExtractsUploader = new S3ExtractsUploader(s3Client);
+
+        String symbol = PREFIX.substring(0, PREFIX.length() - 1);
+        groupAndProcessFiles(s3Client, symbol);
+
+        s3ExtractsUploader.compressAndPushAllScenarios(Path.of("output", symbol));
+
     }
 
     /**
      * Groups S3 keys by scenario, processes each group, and writes a file per scenario.
      *
      * @param s3Client The S3 client.
-     * @param symbol The symbol
+     * @param symbol   The symbol
      */
     public static void groupAndProcessFiles(S3Client s3Client, String symbol) {
         // List all relevant CSV keys from S3.
