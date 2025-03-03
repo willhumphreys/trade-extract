@@ -56,6 +56,6 @@ tasks.test {
 
 tasks.jar {
     manifest {
-        attributes["Main-Class"] = "uk.co.threebugs.analysis.TraderIdSearch"
+        attributes["Main-Class"] = "uk.co.threebugs.analysis.Runner"
     }
 }

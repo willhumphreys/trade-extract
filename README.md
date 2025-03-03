@@ -21,8 +21,7 @@ This project is a Java-based tool for processing and analyzing trade data. It in
 1. **Clone the Repository**
 
    ```bash
-   git clone https://github.com/yourusername/threebugs-analysis.git
-   cd threebugs-analysis
+   gh repo clone willhumphreys/trade-extract
    ```
 
 2. **Build the Project**
