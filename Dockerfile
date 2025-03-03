@@ -19,6 +19,8 @@ RUN chmod +x gradlew && ./gradlew clean shadowJar --no-daemon
 FROM openjdk:21-jdk-slim
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y lzop
+
 # Copy the built JAR file from the builder stage (adjust the pattern if needed)
 COPY --from=builder /app/build/libs/*.jar app.jar
 
