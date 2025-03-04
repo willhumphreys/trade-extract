@@ -1,4 +1,4 @@
-package uk.co.threebugs.analysis;
+package uk.co.threebugs;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.cli.*;
@@ -10,7 +10,11 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.S3Object;
+import uk.co.threebugs.analysis.S3ExtractsUploader;
+import uk.co.threebugs.analysis.S3TradesProcessor;
+import uk.co.threebugs.conversion.TradeProcessor;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,31 +28,18 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 public class Runner {
 
     private static final String BUCKET_NAME = "mochi-graphs";
-    // Change the region if needed.
     private static final Region REGION = Region.US_EAST_1;
-    // Columns to filter duplicate rows.
     private static final List<String> FILTER_COLUMNS = List.of("dayofweek", "hourofday", "stop", "limit", "tickoffset", "tradeduration", "outoftime");
     private static S3TradesProcessor s3TradesProcessor;
 
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
 
         // Define command-line options using Apache Commons CLI.
         Options options = new Options();
 
-        Option symbolOption = Option.builder("s")
-                .longOpt("symbol")
-                .hasArg(true)
-                .desc("The symbol to process (required)")
-                .required(true)
-                .build();
-
-        Option scenarioOption = Option.builder("c")
-                .longOpt("scenario")
-                .hasArg(true)
-                .desc("The scenario to process (required)")
-                .required(true)
-                .build();
+        Option symbolOption = Option.builder("s").longOpt("symbol").hasArg(true).desc("The symbol to process (required)").required(true).build();
+        Option scenarioOption = Option.builder("c").longOpt("scenario").hasArg(true).desc("The scenario to process (required)").required(true).build();
 
         options.addOption(symbolOption);
         options.addOption(scenarioOption);
@@ -76,32 +67,52 @@ public class Runner {
 
         // Create the output directory on startup if it doesn't exist.
         Path outputDir = Paths.get("output");
-        try {
-            Files.createDirectories(outputDir);
-            log.info("Output directory created or already exists: {}", outputDir.toAbsolutePath());
-        } catch (IOException e) {
-            log.error("Failed to create output directory {}: {}", outputDir.toAbsolutePath(), e.getMessage(), e);
-            System.exit(1);
-        }
-
+        Path scenarioDir = outputDir.resolve(symbol).resolve(scenario);
 
         S3Client s3Client = S3Client.builder().region(REGION).build();
 
-        s3TradesProcessor = new S3TradesProcessor(s3Client);
+        File scenarioFile = scenarioDir.toFile();
+        if (!scenarioFile.exists()) {
+
+            try {
+                Files.createDirectories(scenarioDir);
+                log.info("Output directory created or already exists: {}", outputDir.toAbsolutePath());
+            } catch (IOException e) {
+                log.error("Failed to create output directory {}: {}", outputDir.toAbsolutePath(), e.getMessage(), e);
+                System.exit(1);
+            }
+            s3TradesProcessor = new S3TradesProcessor(s3Client);
+
+            groupAndProcessFiles(s3Client, symbol, scenario, outputDir);
+
+        } else {
+            log.info("Output directory already exists for symbol {} and scenario {}. Skipping processing.", symbol, scenario);
+        }
+
+        TradeProcessor tradeProcessor = new TradeProcessor();
+
+        try {
+            List<File> tradeFiles = Arrays.stream(scenarioDir.resolve("raw").toFile().listFiles()).toList();
+
+            tradeProcessor.processTrades(tradeFiles, symbol, scenario);
+            log.info("Finished processing trader file: {} {}", symbol, scenario);
+        } catch (Exception e) {
+            log.error("Error processing trader file: {} {}", symbol, scenario, e);
+        }
+
         S3ExtractsUploader s3ExtractsUploader = new S3ExtractsUploader(s3Client);
+        s3ExtractsUploader.compressAndPushAllScenarios(outputDir.resolve(symbol));
 
-        groupAndProcessFiles(s3Client, symbol, scenario);
-
-        s3ExtractsUploader.compressAndPushAllScenarios(Path.of("output", symbol));
     }
 
     /**
      * Groups S3 keys by scenario, processes each group, and writes a file per scenario.
      *
-     * @param s3Client The S3 client.
-     * @param symbol   The symbol
+     * @param s3Client  The S3 client.
+     * @param symbol    The symbol
+     * @param outputDir
      */
-    public static void groupAndProcessFiles(S3Client s3Client, String symbol, String scenario2) {
+    public static void groupAndProcessFiles(S3Client s3Client, String symbol, String scenario2, Path outputDir) throws IOException {
         // List all relevant CSV keys from S3.
         List<String> keys = listS3Keys(s3Client, BUCKET_NAME, symbol + "/");
         Map<String, List<String>> scenarioGroups = new HashMap<>();
@@ -135,8 +146,9 @@ public class Runner {
             s3TradesProcessor.processTrades(symbol, scenario, traderIds);
 
             // Write the aggregated CSV to a file (name it using the scenario string).
-            Path outputPath = Paths.get(scenario + ".csv");
+
             try {
+                Path outputPath = outputDir.resolve(symbol).resolve(scenario).resolve(scenario + ".csv");
                 Files.writeString(outputPath, aggregatedContent, UTF_8);
                 log.info("File written for scenario '{}': {}", scenario, outputPath.toAbsolutePath());
             } catch (IOException e) {

@@ -11,10 +11,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.*;
 import java.util.*;
 
 import static java.nio.file.StandardOpenOption.APPEND;
@@ -33,7 +30,7 @@ public class S3TradesProcessor {
         this.fileHandler = new FileHandler();
     }
 
-    public void processTrades(String symbol, String scenario, Set<String> traderIds) {
+    public void processTrades(String symbol, String scenario, Set<String> traderIds) throws IOException {
         // Construct the prefix using the actual key structure.
         // The scenario parameter is expected to be the full string as seen in S3.
         String prefix = String.format("%s/%s/", symbol, scenario);
@@ -44,6 +41,7 @@ public class S3TradesProcessor {
             return;
         }
 
+        Path output = Paths.get("output", symbol, scenario, "raw");
         // Process trade files for each available year.
         for (int year : availableYears) {
             int partitionIndex = 0;
@@ -60,7 +58,7 @@ public class S3TradesProcessor {
                     Files.copy(response, tempFile, StandardCopyOption.REPLACE_EXISTING);
                     log.info("Downloaded trade file: {} (temp: {})", key, tempFile);
 
-                    processTradeFile(tempFile.toFile(), symbol, scenario, traderIds);
+                    processTradeFile(tempFile.toFile(), traderIds, output);
 
                     Files.deleteIfExists(tempFile);
                     partitionIndex++;
@@ -76,8 +74,24 @@ public class S3TradesProcessor {
                 }
             }
         }
+
+        String header = "traderId,timeToPlace,dayOfWeek,dayOfMonth,month,weekOfYear,placedDateTime,limitPrice,stopPrice,state,filledPrice,exitPrice,direction";
+
+        addHeaderToFiles(Arrays.stream(output.toFile().listFiles()).map(File::toPath).toList(), header);
     }
 
+    public void addHeaderToFiles(Collection<Path> files, String header) throws IOException {
+        for (Path file : files) {
+            List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+            // Check if the header is already present
+            if (lines.isEmpty() || !lines.getFirst().equals(header)) {
+                List<String> newLines = new ArrayList<>();
+                newLines.add(header);
+                newLines.addAll(lines);
+                Files.write(file, newLines, StandardCharsets.UTF_8, StandardOpenOption.TRUNCATE_EXISTING);
+            }
+        }
+    }
 
     /**
      * Lists objects using the prefix and returns a list of years (as integers) for which trade files exist.
@@ -123,13 +137,11 @@ public class S3TradesProcessor {
      * structure based on the symbol and scenario.
      *
      * @param file      The local file (already decompressed) to process.
-     * @param symbol    The symbol (e.g. "btc-1mF") for folder organization.
-     * @param scenario  The scenario string (e.g. "s_-3000..-100..200___l_100..7500..200___o_-800..800..50___d_14..14..7___out_8..8..4")
-     *                  for folder organization.
      * @param traderIds The set of trader IDs to include.
+     * @param outputDir
      * @throws IOException If an I/O error occurs.
      */
-    private void processTradeFile(File file, String symbol, String scenario, Set<String> traderIds) throws IOException {
+    private void processTradeFile(File file, Set<String> traderIds, Path outputDir) throws IOException {
         // Map to collect trade lines grouped by traderId.
         Map<String, List<String>> traderTrades = new HashMap<>();
 
@@ -155,7 +167,6 @@ public class S3TradesProcessor {
             }
 
             // Prepare output directory based on symbol and scenario.
-            Path outputDir = Paths.get("output", symbol, scenario);
             if (!Files.exists(outputDir)) {
                 Files.createDirectories(outputDir);
             }
@@ -178,13 +189,5 @@ public class S3TradesProcessor {
             }
 
         }
-    }
-
-    // ... other methods such as processTrades, generateTradeKey, etc. ...
-
-
-    // Optional: shutdown the S3 client if needed.
-    public void shutdown() {
-        s3Client.close();
     }
 }
