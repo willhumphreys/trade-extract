@@ -217,7 +217,7 @@ public class Runner {
             }
             isFirstFile = false;
         }
-        return concatenatedCsv.toString();
+        return concatenatedCsv.toString().replace("\"", "");
     }
 
     /**
