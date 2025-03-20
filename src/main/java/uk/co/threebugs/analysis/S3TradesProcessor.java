@@ -20,7 +20,7 @@ import static java.nio.file.StandardOpenOption.CREATE;
 @Slf4j
 public class S3TradesProcessor {
 
-    private static final String TRADES_BUCKET = "mochi-trades";
+    private static final String TRADES_BUCKET = System.getenv("MOCHI_TRADES_BUCKET") != null ? System.getenv("MOCHI_TRADES_BUCKET") : "mochi-trades";
 
     private final S3Client s3Client;
     private final FileHandler fileHandler;

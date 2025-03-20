@@ -20,6 +20,10 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class S3ExtractsUploader {
 
+    public static final String EXTRACTS_BUCKET = System.getenv("MOCHI_PROD_TRADE_EXTRACTS") != null ?
+            System.getenv("MOCHI_PROD_TRADE_EXTRACTS") :
+            "mochi-trade-extracts";
+
     private final S3Client s3Client;
 
     public S3ExtractsUploader(S3Client s3Client) {
@@ -47,14 +51,13 @@ public class S3ExtractsUploader {
             log.info("Successfully compressed {} into temporary ZIP: {}", scenarioDir, tempZip);
 
             // Upload the compressed archive to S3.
-            String extractsBucket = "mochi-trade-extracts";
             PutObjectRequest putRequest = PutObjectRequest.builder()
-                    .bucket(extractsBucket)
+                    .bucket(EXTRACTS_BUCKET)
                     .key(s3Key)
                     .build();
 
             s3Client.putObject(putRequest, RequestBody.fromFile(tempZip));
-            log.info("Uploaded compressed ZIP as key {} to bucket {}", s3Key, extractsBucket);
+            log.info("Uploaded compressed ZIP as key {} to bucket {}", s3Key, EXTRACTS_BUCKET);
         } catch (IOException e) {
             log.error("Error during ZIP compression/upload for directory {}: {}", scenarioDir, e.getMessage(), e);
         } finally {
