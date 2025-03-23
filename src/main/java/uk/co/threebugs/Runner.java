@@ -27,9 +27,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 @Slf4j
 public class Runner {
 
-    private static final String BUCKET_NAME = System.getenv("S3_MOCHI_GRAPHS_BUCKET") != null
-            ? System.getenv("S3_MOCHI_GRAPHS_BUCKET")
-            : "mochi-graphs";
+    private static final String BUCKET_NAME = System.getenv("S3_MOCHI_GRAPHS_BUCKET") != null ? System.getenv("S3_MOCHI_GRAPHS_BUCKET") : "mochi-prod-summary-graphs";
     private static final Region REGION = Region.EU_CENTRAL_1;
     private static final List<String> FILTER_COLUMNS = List.of("dayofweek", "hourofday", "stop", "limit", "tickoffset", "tradeduration", "outoftime");
     private static S3TradesProcessor s3TradesProcessor;
@@ -93,14 +91,12 @@ public class Runner {
 
         TradeProcessor tradeProcessor = new TradeProcessor();
 
-        try {
-            List<File> tradeFiles = Arrays.stream(scenarioDir.resolve("raw").toFile().listFiles()).toList();
 
-            tradeProcessor.processTrades(tradeFiles, symbol, scenario);
-            log.info("Finished processing trader file: {} {}", symbol, scenario);
-        } catch (Exception e) {
-            log.error("Error processing trader file: {} {}", symbol, scenario, e);
-        }
+        List<File> tradeFiles = Arrays.stream(scenarioDir.resolve("raw").toFile().listFiles()).toList();
+
+        tradeProcessor.processTrades(tradeFiles, symbol, scenario);
+        log.info("Finished processing trader file: {} {}", symbol, scenario);
+
 
         S3ExtractsUploader s3ExtractsUploader = new S3ExtractsUploader(s3Client);
         s3ExtractsUploader.compressAndPushAllScenarios(outputDir.resolve(symbol));

@@ -20,7 +20,7 @@ import static java.nio.file.StandardOpenOption.CREATE;
 @Slf4j
 public class S3TradesProcessor {
 
-    private static final String TRADES_BUCKET = System.getenv("MOCHI_TRADES_BUCKET") != null ? System.getenv("MOCHI_TRADES_BUCKET") : "mochi-trades";
+    private static final String TRADES_BUCKET = System.getenv("MOCHI_TRADES_BUCKET") != null ? System.getenv("MOCHI_TRADES_BUCKET") : "mochi-prod-backtest-trades";
 
     private final S3Client s3Client;
     private final FileHandler fileHandler;
@@ -75,7 +75,7 @@ public class S3TradesProcessor {
             }
         }
 
-        String header = "traderId,timeToPlace,dayOfWeek,dayOfMonth,month,weekOfYear,placedDateTime,limitPrice,stopPrice,state,filledPrice,exitPrice,direction";
+        String header = "tradeId,traderId,timeToPlace,dayOfWeek,dayOfMonth,month,weekOfYear,placedDateTime,limitPrice,stopPrice,state,filledPrice,exitPrice,direction";
 
         addHeaderToFiles(Arrays.stream(output.toFile().listFiles()).map(File::toPath).toList(), header);
     }
