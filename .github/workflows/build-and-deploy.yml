@@ -27,6 +27,9 @@ jobs:
 
       - name: Build with Gradle
         run: ./gradlew clean build
+        env:
+          REPSY_USERNAME: ${{ secrets.REPSY_USERNAME }}
+          REPSY_PASSWORD: ${{ secrets.REPSY_PASSWORD }}
 
       - name: Upload JAR Artifact
         uses: actions/upload-artifact@v4

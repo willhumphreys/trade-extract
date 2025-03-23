@@ -14,6 +14,15 @@ repositories {
     maven {
         url = uri("https://maven.twttr.com")
     }
+    maven {
+        name = "RepsyRepository"
+        url = uri("https://api.repsy.io/mvn/willhumphreys/default")
+        credentials {
+            username = System.getenv("REPSY_USERNAME") ?: project.findProperty("repsyUsername") as String? ?: ""
+            password = System.getenv("REPSY_PASSWORD") ?: project.findProperty("repsyPassword") as String? ?: ""
+        }
+
+    }
 }
 
 dependencies {

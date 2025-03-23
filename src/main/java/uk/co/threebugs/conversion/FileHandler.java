@@ -10,7 +10,7 @@ import java.util.regex.Pattern;
 @Slf4j
 public class FileHandler {
 
-    private static final String EXPECTED_HEADER = "traderId,timeToPlace,dayOfWeek,dayOfMonth,month,weekOfYear,placedDateTime,limitPrice,stopPrice,state,filledPrice,exitPrice,direction";
+    private static final String EXPECTED_HEADER = "tradeId,traderId,timeToPlace,dayOfWeek,dayOfMonth,month,weekOfYear,placedDateTime,limitPrice,stopPrice,state,filledPrice,exitPrice,direction";
 
     public void validateHeader(String header) {
         if (header == null || !header.equals(EXPECTED_HEADER)) {
@@ -25,14 +25,5 @@ public class FileHandler {
             headerMap.put(headers[i], i);
         }
         return headerMap;
-    }
-
-    private int extractFileIndex(File file) {
-        var pattern = Pattern.compile("p(\\d+)\\.csv\\.lzo");
-        var matcher = pattern.matcher(file.getName());
-        if (matcher.find()) {
-            return Integer.parseInt(matcher.group(1));
-        }
-        return Integer.MAX_VALUE;
     }
 }

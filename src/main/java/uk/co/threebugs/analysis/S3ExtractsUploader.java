@@ -22,7 +22,7 @@ public class S3ExtractsUploader {
 
     public static final String EXTRACTS_BUCKET = System.getenv("MOCHI_PROD_TRADE_EXTRACTS") != null ?
             System.getenv("MOCHI_PROD_TRADE_EXTRACTS") :
-            "mochi-trade-extracts";
+            "mochi-prod-trade-extracts";
 
     private final S3Client s3Client;
 
