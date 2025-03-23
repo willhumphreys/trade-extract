@@ -12,9 +12,6 @@ repositories {
         url = uri("https://repository.cloudera.com/artifactory/ext-release-local/")
     }
     maven {
-        url = uri("https://maven.twttr.com")
-    }
-    maven {
         name = "RepsyRepository"
         url = uri("https://api.repsy.io/mvn/willhumphreys/default")
         credentials {
