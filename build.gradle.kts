@@ -17,9 +17,18 @@ repositories {
 }
 
 dependencies {
-    // Hadoop dependencies from pom.xml
+
+
+    // https://mvnrepository.com/artifact/com.hadoop.gplcompression/hadoop-lzo
     implementation("com.hadoop.gplcompression:hadoop-lzo:0.4.20")
-    implementation("org.apache.hadoop:hadoop-common:3.3.0")
+
+
+    // https://mvnrepository.com/artifact/org.apache.hadoop/hadoop-common
+    implementation("org.apache.hadoop:hadoop-common:2.7.3") {
+        exclude(group = "commons-beanutils", module = "commons-beanutils")
+    }
+
+
     implementation("software.amazon.awssdk:s3:2.20.40")
     implementation("commons-cli:commons-cli:1.5.0")
 
