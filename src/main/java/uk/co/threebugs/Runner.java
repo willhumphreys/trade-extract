@@ -337,7 +337,7 @@ public class Runner {
         }
         if (traderIdIndex == -1) {
             log.error("The CSV header does not contain a 'traderid' column.");
-            return traderIds;
+            throw new IllegalArgumentException("The CSV header does not contain a 'traderid' column.");
         }
 
         // Process each subsequent row.

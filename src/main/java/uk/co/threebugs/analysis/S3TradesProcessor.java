@@ -38,7 +38,7 @@ public class S3TradesProcessor {
         List<Integer> availableYears = getAvailableYears(prefix);
         if (availableYears.isEmpty()) {
             log.warn("No available years found for prefix: {}", prefix);
-            return;
+            throw new IllegalArgumentException("No available years found for prefix: " + prefix);
         }
 
         Path output = Paths.get("output", symbol, scenario, "raw");
@@ -147,6 +147,17 @@ public class S3TradesProcessor {
 
         try (BufferedReader reader = fileHandler.getReader(file)) {
             String line;
+
+            String header = reader.readLine();
+
+            String[] headerArray = header.split(",");
+
+            int traderIdIndex = 1;
+
+            if(!headerArray[traderIdIndex].trim().equalsIgnoreCase("traderid")) {
+                throw new IllegalArgumentException("Invalid header: " + header);
+            }
+
             while ((line = reader.readLine()) != null) {
 
                 if (line.trim().isEmpty()) {
@@ -158,7 +169,7 @@ public class S3TradesProcessor {
                 if (tokens.length < 1) {
                     continue;
                 }
-                String traderId = tokens[0].trim();
+                String traderId = tokens[traderIdIndex].trim();
 
                 // Only include trades for the specified traderIds.
                 if (traderIds.contains(traderId)) {
