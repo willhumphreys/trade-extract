@@ -143,7 +143,6 @@ public class Runner {
 
             s3TradesProcessor.processTrades(symbol, scenario, traderIds);
 
-            // Write the aggregated CSV to a file (name it using the scenario string).
 
             try {
                 Path outputPath = outputDir.resolve(symbol).resolve(scenario).resolve(scenario + ".csv");
