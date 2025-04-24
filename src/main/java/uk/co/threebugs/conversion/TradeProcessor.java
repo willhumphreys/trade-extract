@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -78,6 +79,7 @@ public class TradeProcessor {
             // Get index of PlaceDateTime column
             Map<String, Integer> headerMap = fileHandler.createHeaderMap(header);
             int placeDateTimeIndex = headerMap.getOrDefault("PlaceDateTime", 0);
+            int profitIndex = headerMap.getOrDefault("Profit", 3);
 
             // Sort the data lines (excluding header)
             List<String> dataLines = lines.subList(1, lines.size());
@@ -91,18 +93,47 @@ public class TradeProcessor {
                 return 0;
             });
 
-            // Write back the sorted file (header + sorted data)
+            // Recalculate running totals after sorting
+            int runningTotal = 0;
+            List<String> updatedLines = new ArrayList<>();
+
+            for (String line : dataLines) {
+                String[] parts = line.split(",");
+                if (parts.length > profitIndex) {
+                    int profit = Integer.parseInt(parts[profitIndex]);
+                    runningTotal += profit;
+
+                    // Reconstruct the line with the updated running total
+                    StringBuilder updatedLine = new StringBuilder();
+                    for (int i = 0; i < parts.length; i++) {
+                        if (i == profitIndex + 1) { // RunningTotalProfit index
+                            updatedLine.append(runningTotal);
+                        } else {
+                            updatedLine.append(parts[i]);
+                        }
+
+                        if (i < parts.length - 1) {
+                            updatedLine.append(",");
+                        }
+                    }
+                    updatedLines.add(updatedLine.toString());
+                } else {
+                    updatedLines.add(line);
+                }
+            }
+
+            // Write back the sorted file (header + sorted data with updated running totals)
             try (BufferedWriter writer = Files.newBufferedWriter(filePath)) {
                 writer.write(header);
                 writer.newLine();
 
-                for (String line : dataLines) {
+                for (String line : updatedLines) {
                     writer.write(line);
                     writer.newLine();
                 }
             }
 
-            log.info("Sorted file: {}", filePath.getFileName());
+            log.info("Sorted file and recalculated running totals: {}", filePath.getFileName());
         } catch (IOException e) {
             log.error("Error sorting file: {}", filePath.getFileName(), e);
         }

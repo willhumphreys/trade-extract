@@ -92,7 +92,17 @@ public class Runner {
         TradeProcessor tradeProcessor = new TradeProcessor();
 
 
-        List<File> tradeFiles = Arrays.stream(scenarioDir.resolve("raw").toFile().listFiles()).toList();
+        File rawDir = scenarioDir.resolve("raw").toFile();
+        if (!rawDir.exists()) {
+            throw new IllegalStateException("Raw directory does not exist: " + rawDir.getAbsolutePath());
+        }
+
+        File[] files = rawDir.listFiles();
+        if (files == null) {
+            throw new IllegalStateException("Unable to list files in directory: " + rawDir.getAbsolutePath());
+        }
+
+        List<File> tradeFiles = Arrays.stream(files).toList();
 
         tradeProcessor.processTrades(tradeFiles, symbol, scenario);
         log.info("Finished processing trader file: {} {}", symbol, scenario);
