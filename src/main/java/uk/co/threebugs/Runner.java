@@ -40,9 +40,11 @@ public class Runner {
 
         Option symbolOption = Option.builder("s").longOpt("symbol").hasArg(true).desc("The symbol to process (required)").required(true).build();
         Option scenarioOption = Option.builder("c").longOpt("scenario").hasArg(true).desc("The scenario to process (required)").required(true).build();
+        Option backTestIdOption = Option.builder().longOpt("back_test_id").hasArg(true).desc("The back test ID").required(false).build();
 
         options.addOption(symbolOption);
         options.addOption(scenarioOption);
+        options.addOption(backTestIdOption);
 
         CommandLineParser parser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
@@ -60,10 +62,12 @@ public class Runner {
         // Retrieve the symbol and scenario values.
         String symbol = cmd.getOptionValue("symbol");
         String scenario = cmd.getOptionValue("scenario");
+        String backTestId = cmd.getOptionValue("back_test_id");
 
         // Log the received parameters.
         log.info("Received symbol: {}", symbol);
         log.info("Received scenario: {}", scenario);
+        log.info("Received back_test_id: {}", backTestId);
 
         // Create the output directory on startup if it doesn't exist.
         Path outputDir = Paths.get("output");
@@ -368,4 +372,3 @@ public class Runner {
         return traderIds;
     }
 }
-
