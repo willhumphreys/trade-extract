@@ -71,7 +71,7 @@ public class Runner {
 
         // Create the output directory on startup if it doesn't exist.
         Path outputDir = Paths.get("output");
-        Path scenarioDir = outputDir.resolve(symbol).resolve(scenario);
+        Path scenarioDir = outputDir.resolve(backTestId).resolve(symbol).resolve(scenario);
 
         S3Client s3Client = S3Client.builder().region(REGION).build();
 
@@ -87,7 +87,7 @@ public class Runner {
             }
             s3TradesProcessor = new S3TradesProcessor(s3Client);
 
-            groupAndProcessFiles(s3Client, symbol, scenario, outputDir);
+            groupAndProcessFiles(s3Client, symbol, backTestId + "/" + symbol + "/" + scenario, outputDir, backTestId);
 
         } else {
             log.info("Output directory already exists for symbol {} and scenario {}. Skipping processing.", symbol, scenario);
@@ -108,39 +108,36 @@ public class Runner {
 
         List<File> tradeFiles = Arrays.stream(files).toList();
 
-        tradeProcessor.processTrades(tradeFiles, symbol, scenario);
-        log.info("Finished processing trader file: {} {}", symbol, scenario);
+        tradeProcessor.processTrades(tradeFiles, symbol, scenario, backTestId);
+        log.info("Finished processing trader file: {} {} {}", backTestId, symbol, scenario);
 
 
         S3ExtractsUploader s3ExtractsUploader = new S3ExtractsUploader(s3Client);
-        s3ExtractsUploader.compressAndPushAllScenarios(outputDir.resolve(symbol));
+        s3ExtractsUploader.compressAndPushAllScenarios(outputDir.resolve(backTestId).resolve(symbol), backTestId);
 
     }
 
     /**
      * Groups S3 keys by scenario, processes each group, and writes a file per scenario.
      *
-     * @param s3Client  The S3 client.
-     * @param symbol    The symbol
+     * @param s3Client   The S3 client.
+     * @param symbol     The symbol
      * @param outputDir
+     * @param backTestId
      */
-    public static void groupAndProcessFiles(S3Client s3Client, String symbol, String scenario2, Path outputDir) throws IOException {
+    public static void groupAndProcessFiles(S3Client s3Client, String symbol, String scenario2, Path outputDir, String backTestId) throws IOException {
         // List all relevant CSV keys from S3.
-        List<String> keys = listS3Keys(s3Client, BUCKET_NAME, symbol + "/");
+        List<String> keys = listS3Keys(s3Client, BUCKET_NAME, backTestId + "/" + symbol + "/");
         Map<String, List<String>> scenarioGroups = new HashMap<>();
 
         // Group keys by scenario. Assuming the key format is:
         // "<PREFIX><scenario>/<other folders>/...csv"
         for (String key : keys) {
-            int slashIndex = key.indexOf("/", symbol.length() + 1);
-            if (slashIndex > 0) {
-                String scenario = key.substring(symbol.length() + 1, slashIndex);
-                if (scenario.equals(scenario2)) {
-                    scenarioGroups.computeIfAbsent(scenario, k -> new ArrayList<>()).add(key);
+
+                if (key.contains(scenario2 + "/")) {
+                    scenarioGroups.computeIfAbsent(scenario2, k -> new ArrayList<>()).add(key);
                 }
-            } else {
-                log.warn("Key does not contain a scenario folder: {}", key);
-            }
+
         }
 
         // Process each scenario group.
@@ -155,7 +152,7 @@ public class Runner {
 
             Set<String> traderIds = extractTraderIds(aggregatedContent);
 
-            s3TradesProcessor.processTrades(symbol, scenario, traderIds);
+            s3TradesProcessor.processTrades(symbol, scenario, traderIds, backTestId);
 
 
             try {

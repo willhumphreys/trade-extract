@@ -77,9 +77,10 @@ public class S3ExtractsUploader {
      * The S3 key for each uploaded ZIP is in the format "symbol/scenarioName.zip",
      * where "symbol" is the name of the symbol directory.
      *
-     * @param symbolDir The parent directory representing a symbol that contains scenario subdirectories.
+     * @param symbolDir  The parent directory representing a symbol that contains scenario subdirectories.
+     * @param backTestId
      */
-    public void compressAndPushAllScenarios(Path symbolDir) {
+    public void compressAndPushAllScenarios(Path symbolDir, String backTestId) {
         if (!Files.isDirectory(symbolDir)) {
             log.warn("Symbol directory does not exist or is not a directory: {}", symbolDir);
             return;
@@ -92,7 +93,7 @@ public class S3ExtractsUploader {
                     .forEach(scenarioDir -> {
                         String scenarioName = scenarioDir.getFileName().toString();
                         // Create an S3 key that mirrors the directory structure: symbol/scenarioName.zip
-                        String s3Key = symbol + "/" + scenarioName + ".zip";
+                        String s3Key = backTestId + "/" + symbol + "/" + scenarioName + ".zip";
                         compressAndPushScenarioZip(scenarioDir, s3Key);
                     });
         } catch (IOException e) {

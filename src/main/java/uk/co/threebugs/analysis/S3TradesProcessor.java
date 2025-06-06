@@ -30,11 +30,11 @@ public class S3TradesProcessor {
         this.fileHandler = new FileHandler();
     }
 
-    public void processTrades(String symbol, String scenario, Set<String> traderIds) throws IOException {
+    public void processTrades(String symbol, String scenario, Set<String> traderIds, String backTestId) throws IOException {
         // Construct the prefix using the actual key structure
-        String prefix = String.format("%s/%s/", symbol, scenario);
+        String prefix = scenario + "/";
 
-        Path output = Paths.get("output", symbol, scenario, "raw");
+        Path output = Paths.get("output", scenario, "raw");
 
         // List all objects under the prefix
         ListObjectsV2Request listRequest = ListObjectsV2Request.builder()
@@ -105,7 +105,7 @@ public class S3TradesProcessor {
      *
      * @param file      The local file (already decompressed) to process.
      * @param traderIds The set of trader IDs to include.
-     * @param outputDir
+     * @param outputDir The directory where the output files will be written, structured by traderId.
      * @throws IOException If an I/O error occurs.
      */
     private void processTradeFile(File file, Set<String> traderIds, Path outputDir) throws IOException {

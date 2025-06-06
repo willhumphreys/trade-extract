@@ -26,8 +26,8 @@ public class TradeProcessor {
         this.lineProcessor = new LineProcessor();
     }
 
-    public void processTrades(List<File> files, String symbol, String scenario) throws IOException {
-        Path formattedTradesOutputPath = Paths.get("output", symbol, scenario, "formatted-trades");
+    public void processTrades(List<File> files, String symbol, String scenario, String backTestId) throws IOException {
+        Path formattedTradesOutputPath = Paths.get("output", backTestId, symbol, scenario, "formatted-trades");
 
         Files.createDirectories(formattedTradesOutputPath);
 
