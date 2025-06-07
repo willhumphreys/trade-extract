@@ -27,7 +27,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 @Slf4j
 public class Runner {
 
-    private static final String BUCKET_NAME = System.getenv("S3_MOCHI_GRAPHS_BUCKET") != null ? System.getenv("S3_MOCHI_GRAPHS_BUCKET") : "mochi-prod-summary-graphs";
+    private static final String SUMMARY_GRAPHS_BUCKET_NAME = System.getenv("S3_MOCHI_GRAPHS_BUCKET") != null ? System.getenv("S3_MOCHI_GRAPHS_BUCKET") : "mochi-prod-summary-graphs";
     private static final Region REGION = Region.EU_CENTRAL_1;
     private static final List<String> FILTER_COLUMNS = List.of("dayofweek", "hourofday", "stop", "limit", "tickoffset", "tradeduration", "outoftime");
     private static S3TradesProcessor s3TradesProcessor;
@@ -127,7 +127,7 @@ public class Runner {
      */
     public static void groupAndProcessFiles(S3Client s3Client, String symbol, String scenario2, Path outputDir, String backTestId) throws IOException {
         // List all relevant CSV keys from S3.
-        List<String> keys = listS3Keys(s3Client, BUCKET_NAME, backTestId + "/" + symbol + "/");
+        List<String> keys = listS3Keys(s3Client, SUMMARY_GRAPHS_BUCKET_NAME, backTestId + "/" + symbol + "/");
         Map<String, List<String>> scenarioGroups = new HashMap<>();
 
         // Group keys by scenario. Assuming the key format is:
@@ -146,22 +146,26 @@ public class Runner {
             List<String> scenarioKeys = entry.getValue();
 
             // Download and concatenate CSV content for the group.
-            String aggregatedContent = processCsvGroup(s3Client, BUCKET_NAME, scenarioKeys);
+            String aggregatedContent = processCsvGroup(s3Client, SUMMARY_GRAPHS_BUCKET_NAME, scenarioKeys);
             // Remove duplicate rows.
             aggregatedContent = filterDuplicates(aggregatedContent, FILTER_COLUMNS);
+
+
+            try {
+                Path outputPath = outputDir.resolve(scenario).resolve(scenario.substring(scenario.lastIndexOf("/") +1) + ".csv");
+                Files.writeString(outputPath, aggregatedContent, UTF_8);
+                log.info("File written for scenario '{}': {}", scenario, outputPath.toAbsolutePath());
+            } catch (IOException e) {
+                log.error("Error writing file for scenario '{}'", scenario, e);
+                throw new IOException("Failed to write aggregated CSV content for scenario: " + scenario, e);
+            }
 
             Set<String> traderIds = extractTraderIds(aggregatedContent);
 
             s3TradesProcessor.processTrades(symbol, scenario, traderIds, backTestId);
 
 
-            try {
-                Path outputPath = outputDir.resolve(symbol).resolve(scenario).resolve(scenario + ".csv");
-                Files.writeString(outputPath, aggregatedContent, UTF_8);
-                log.info("File written for scenario '{}': {}", scenario, outputPath.toAbsolutePath());
-            } catch (IOException e) {
-                log.error("Error writing file for scenario '{}'", scenario, e);
-            }
+
         }
     }
 
